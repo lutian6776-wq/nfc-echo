@@ -1,0 +1,37 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:processDebugResources'.
+> Could not isolate parameters com.android.build.gradle.internal.dependency.AarResourcesCompilerTransform$Parameters_Decorated@34c651d1 of artifact transform AarResourcesCompilerTransform
+   > Could not isolate value com.android.build.gradle.internal.dependency.AarResourcesCompilerTransform$Parameters_Decorated@34c651d1 of type AarResourcesCompilerTransform.Parameters
+      > Could not resolve all files for configuration ':app:detachedConfiguration2'.
+         > Failed to transform aapt2-8.9.2-12782657-windows.jar (com.android.tools.build:aapt2:8.9.2-12782657) to match attributes {artifactType=_internal-android-aapt2-binary, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-runtime}.
+            > Execution failed for Aapt2Extractor: C:\Users\lu\.gradle\caches\modules-2\files-2.1\com.android.tools.build\aapt2\8.9.2-12782657\a2efed3217e291243233c13958974f7c24962230\aapt2-8.9.2-12782657-windows.jar.
+               > 纾佺洏绌洪棿涓嶈冻銆?
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 8s
+13 actionable tasks: 1 executed, 12 up-to-date
