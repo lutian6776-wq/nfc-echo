@@ -2,6 +2,37 @@ package com.echo.lutian.network
 
 import com.google.gson.annotations.SerializedName
 
+// ==================== 系统管理相关 ====================
+
+data class SystemStatusResponse(
+    @SerializedName("success")
+    val success: Boolean,
+    @SerializedName("isInitialized")
+    val isInitialized: Boolean,
+    @SerializedName("error")
+    val error: String? = null
+)
+
+data class InitAdminRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+    @SerializedName("password")
+    val password: String,
+    @SerializedName("name")
+    val name: String? = null
+)
+
+data class UpdateRoleRequest(
+    @SerializedName("targetUserId")
+    val targetUserId: String? = null,
+    @SerializedName("role")
+    val role: String? = null,
+    @SerializedName("adminPassword")
+    val adminPassword: String,
+    @SerializedName("newPassword")
+    val newPassword: String? = null
+)
+
 // ==================== 用户管理相关 ====================
 
 /**

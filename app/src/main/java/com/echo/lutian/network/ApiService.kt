@@ -10,6 +10,21 @@ import retrofit2.http.*
  */
 interface ApiService {
 
+    // ==================== 系统管理相关 ====================
+
+    @GET("api/system/status")
+    suspend fun getSystemStatus(): Response<SystemStatusResponse>
+
+    @POST("api/admin/init")
+    suspend fun initAdmin(
+        @Body request: InitAdminRequest
+    ): Response<BasicResponse>
+
+    @PUT("api/users/role")
+    suspend fun updateUserRole(
+        @Body request: UpdateRoleRequest
+    ): Response<BasicResponse>
+
     // ==================== 用户管理接口 ====================
 
     /**

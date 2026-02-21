@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
  */
 enum class AppState {
     INITIALIZING,   // 初始化状态（新增）
+    SETUP_SERVER,   // 配置服务器地址
+    SETUP_ADMIN,    // 首次系统初始化（设置管理员信息）
     IDLE,       // 空闲状态
     PLAYING,    // 播放状态
     COUNTDOWN,  // 录音倒计时
@@ -46,10 +48,19 @@ class MainViewModel : ViewModel() {
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     /**
+     * 进入初始化状态
+     */
+    fun setInitializingState() {
+        _uiState.value = MainUiState(appState = AppState.INITIALIZING)
+    }
+
+    /**
      * 完成初始化，进入主界面
      */
     fun completeInitialization() {
-        _uiState.value = MainUiState(appState = AppState.IDLE)
+        if (_uiState.value.appState == AppState.INITIALIZING) {
+            _uiState.value = MainUiState(appState = AppState.IDLE)
+        }
     }
 
     /**
@@ -59,6 +70,20 @@ class MainViewModel : ViewModel() {
         if (_uiState.value.appState == AppState.INITIALIZING) {
             _uiState.value = _uiState.value.copy(syncMessage = message)
         }
+    }
+
+    /**
+     * 进入配置服务器状态
+     */
+    fun setSetupServerState() {
+        _uiState.value = MainUiState(appState = AppState.SETUP_SERVER)
+    }
+
+    /**
+     * 进入初始化管理员状态
+     */
+    fun setSetupAdminState() {
+        _uiState.value = MainUiState(appState = AppState.SETUP_ADMIN)
     }
 
     /**

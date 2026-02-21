@@ -68,6 +68,68 @@ const upload = multer({
 // 静态文件服务（用于访问上传的音频）
 app.use('/files', express.static(STORAGE_PATH));
 
+// ==================== 系统初始化与管理 ====================
+
+/**
+ * 获取系统状态
+ * GET /api/system/status
+ */
+app.get('/api/system/status', async (req, res) => {
+  try {
+    const adminUser = await db.collection('users').findOne({ role: 'admin' });
+    res.json({
+      success: true,
+      isInitialized: !!adminUser
+    });
+  } catch (error) {
+    console.error('System status error:', error);
+    res.status(500).json({ error: 'Failed to get system status', details: error.message });
+  }
+});
+
+/**
+ * 初始化管理员
+ * POST /api/admin/init
+ * Body: { deviceId: string, name?: string, password: string }
+ */
+app.post('/api/admin/init', async (req, res) => {
+  try {
+    const { deviceId, name, password } = req.body;
+    if (!deviceId || !password) {
+      return res.status(400).json({ error: 'deviceId and password are required' });
+    }
+
+    const adminUser = await db.collection('users').findOne({ role: 'admin' });
+    if (adminUser) {
+      return res.status(400).json({ error: 'System is already initialized' });
+    }
+
+    // Check if user already exists
+    let user = await db.collection('users').findOne({ deviceId: deviceId });
+    if (user) {
+      await db.collection('users').updateOne(
+        { _id: user._id },
+        { $set: { role: 'admin', adminPassword: password, name: name || user.name } }
+      );
+    } else {
+      const newUser = {
+        deviceId: deviceId,
+        name: name || `管理员_${deviceId.substring(0, 4)}`,
+        role: 'admin',
+        adminPassword: password,
+        createdAt: new Date(),
+        lastActiveAt: new Date()
+      };
+      await db.collection('users').insertOne(newUser);
+    }
+
+    res.json({ success: true, message: 'Admin initialized successfully' });
+  } catch (error) {
+    console.error('Admin init error:', error);
+    res.status(500).json({ error: 'Failed to init admin', details: error.message });
+  }
+});
+
 // ==================== 用户管理接口 ====================
 
 /**
@@ -164,7 +226,15 @@ app.get('/api/users', async (req, res) => {
 app.put('/api/users/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
-    const { name, nfcTagId, role } = req.body;
+    const { name, nfcTagId, role, adminPassword } = req.body;
+
+    // Verify admin password if role check is required or if we simply enforce it
+    if (adminPassword) {
+      const adminUser = await db.collection('users').findOne({ role: 'admin', adminPassword: adminPassword });
+      if (!adminUser) {
+        return res.status(403).json({ error: 'Invalid admin password' });
+      }
+    }
 
     const updateFields = {};
     if (name) updateFields.name = name;
@@ -186,6 +256,53 @@ app.put('/api/users/:userId', async (req, res) => {
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user', details: error.message });
+  }
+});
+
+/**
+ * 修改用户角色或管理密码
+ * PUT /api/users/role
+ * Body: { targetUserId: string, role?: string, newPassword?: string, adminPassword: string }
+ */
+app.put('/api/users/role', async (req, res) => {
+  try {
+    const { targetUserId, role, newPassword, adminPassword } = req.body;
+
+    if (!adminPassword) {
+      return res.status(400).json({ error: 'Admin password is required' });
+    }
+
+    const adminUser = await db.collection('users').findOne({ role: 'admin', adminPassword: adminPassword });
+    if (!adminUser) {
+      return res.status(403).json({ error: 'Invalid admin password' });
+    }
+
+    let query = {};
+    if (targetUserId) {
+      query._id = new ObjectId(targetUserId);
+    } else {
+      // if no targetUserId is provided, assume it's updating self (admin changes own password)
+      query._id = adminUser._id;
+    }
+
+    const updateFields = { updatedAt: new Date() };
+    if (role) updateFields.role = role;
+    if (newPassword) updateFields.adminPassword = newPassword;
+
+    const result = await db.collection('users').updateOne(
+      query,
+      { $set: updateFields }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'User role/password updated successfully' });
+
+  } catch (error) {
+    console.error('Update role error:', error);
+    res.status(500).json({ error: 'Failed to update user role', details: error.message });
   }
 });
 

@@ -48,10 +48,15 @@ fun MainScreen(
     userName: String? = null,
     userInfo: String? = null,
     onCancelCountdown: () -> Unit = {},
-    onCancelSync: () -> Unit = {}
+    onCancelSync: () -> Unit = {},
+    currentRecipientName: String? = null,
+    onChangeRecipient: () -> Unit = {}
 ) {
     // 根据状态显示不同的界面
     when (uiState.appState) {
+        AppState.SETUP_SERVER, AppState.SETUP_ADMIN -> {
+            // 这两个状态在 MainActivity 中直接处理，不在此显示
+        }
         AppState.INITIALIZING -> InitializingScreen(
             message = uiState.syncMessage ?: "正在初始化..."
         )
@@ -78,7 +83,9 @@ fun MainScreen(
         )
         AppState.CONFIRMING -> ConfirmingScreen(
             onCancel = onCancelRecording,
-            onSend = onConfirmSend
+            onSend = onConfirmSend,
+            currentRecipientName = currentRecipientName,
+            onChangeRecipient = onChangeRecipient
         )
         AppState.SYNCING -> SyncingScreen(
             message = uiState.syncMessage ?: "同步中...",
@@ -876,70 +883,100 @@ fun VolumeLevelBar(
 @Composable
 fun ConfirmingScreen(
     onCancel: () -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    currentRecipientName: String? = null,
+    onChangeRecipient: () -> Unit = {}
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        // 上半部：红色取消按钮
-        Button(
-            onClick = onCancel,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFF44336)
-            ),
-            shape = RoundedCornerShape(0.dp)
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            // 上半部：红色取消按钮
+            Button(
+                onClick = onCancel,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF44336)
+                ),
+                shape = RoundedCornerShape(0.dp)
             ) {
-                Text(
-                    text = "✕",
-                    fontSize = 120.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "取消",
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "✕",
+                        fontSize = 120.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "取消",
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+
+            // 下半部：绿色发送按钮
+            Button(
+                onClick = onSend,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                ),
+                shape = RoundedCornerShape(0.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "✓",
+                        fontSize = 120.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "发送",
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
         }
-
-        // 下半部：绿色发送按钮
-        Button(
-            onClick = onSend,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4CAF50)
-            ),
-            shape = RoundedCornerShape(0.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+        
+        // 中间浮层：选择接收者
+        if (currentRecipientName != null) {
+            Surface(
+                onClick = onChangeRecipient,
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.5f),
+                modifier = Modifier.padding(16.dp)
             ) {
-                Text(
-                    text = "✓",
-                    fontSize = 120.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "发送",
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "当前发给: $currentRecipientName (点此更改)",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }

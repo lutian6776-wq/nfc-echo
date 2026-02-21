@@ -13,13 +13,69 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
 
+import com.echo.lutian.util.AppPreferences
+
 /**
  * 网络仓库，处理所有网络请求
  */
 class NetworkRepository(private val context: Context) {
 
-    private val apiService = RetrofitClient.apiService
+    private val prefs = AppPreferences(context)
     private val TAG = "NetworkRepository"
+
+    init {
+        RetrofitClient.init(prefs.serverUrl)
+    }
+
+    private val apiService: ApiService
+        get() = RetrofitClient.apiService ?: throw IllegalStateException("Backend server URL is not configured")
+
+    fun updateServerUrl(url: String) {
+        prefs.serverUrl = url
+        RetrofitClient.init(url)
+    }
+
+    // ==================== 系统管理相关 ====================
+
+    suspend fun getSystemStatus(): SystemStatusResponse? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.getSystemStatus()
+                if (response.isSuccessful) {
+                    response.body()
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "getSystemStatus error", e)
+                null
+            }
+        }
+    }
+
+    suspend fun initAdmin(deviceId: String, password: String, name: String? = null): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.initAdmin(InitAdminRequest(deviceId, password, name))
+                response.isSuccessful && response.body()?.success == true
+            } catch (e: Exception) {
+                Log.e(TAG, "initAdmin error", e)
+                false
+            }
+        }
+    }
+
+    suspend fun updateUserRole(targetUserId: String?, role: String?, adminPassword: String, newPassword: String? = null): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.updateUserRole(UpdateRoleRequest(targetUserId, role, adminPassword, newPassword))
+                response.isSuccessful && response.body()?.success == true
+            } catch (e: Exception) {
+                Log.e(TAG, "updateUserRole error", e)
+                false
+            }
+        }
+    }
 
     // ==================== 用户管理接口 ====================
 

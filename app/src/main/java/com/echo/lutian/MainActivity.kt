@@ -39,10 +39,13 @@ import com.echo.lutian.service.AudioService
 import com.echo.lutian.ui.screen.AdminModeScreen
 import com.echo.lutian.ui.screen.MainScreen
 import com.echo.lutian.ui.screen.ReceiverSelectionScreen
+import com.echo.lutian.ui.screen.SetupServerScreen
+import com.echo.lutian.ui.screen.SetupAdminScreen
 import com.echo.lutian.ui.screen.UserConversationScreen
 import com.echo.lutian.ui.screen.UserHistoryScreen
 import com.echo.lutian.ui.theme.MyApplicationTheme
 import com.echo.lutian.util.DebugUtil
+import com.echo.lutian.util.AppPreferences
 import com.echo.lutian.viewmodel.AppState
 import com.echo.lutian.viewmodel.MainViewModel
 import com.echo.lutian.viewmodel.UserViewModel
@@ -124,6 +127,9 @@ class MainActivity : ComponentActivity() {
                 val latestMessageRead by userViewModel.latestSentMessageRead.collectAsState()
                 val hasUnreadNewMessage by userViewModel.hasUnreadNewMessage.collectAsState()
 
+                val appPreferences = remember { AppPreferences(this@MainActivity) }
+                var serverUrl by remember { mutableStateOf(appPreferences.serverUrl) }
+
                 // 定期检查最新消息状态（仅普通用户）
                 LaunchedEffect(currentUser) {
                     if (currentUser?.role != "admin") {
@@ -137,6 +143,20 @@ class MainActivity : ComponentActivity() {
                 // 返回键处理
                 var showExitDialog by remember { mutableStateOf(false) }
 
+                // 当前接收者逻辑
+                var localLastRecipientId by remember { mutableStateOf(appPreferences.lastRecipientId) }
+                val currentRecipientId = remember(users, localLastRecipientId) {
+                    localLastRecipientId ?: users.firstOrNull { it.role == "admin" }?.userId ?: users.firstOrNull { it.userId != currentUser?.userId }?.userId
+                }
+                val currentRecipientName = remember(users, currentRecipientId) {
+                    val user = users.firstOrNull { it.userId == currentRecipientId }
+                    if (user != null) {
+                        "${user.name} (${if (user.role == "admin") "管理员" else "普通用户"})"
+                    } else {
+                        "未知接收者"
+                    }
+                }
+
                 // 管理员密码验证对话框
                 var showAdminPasswordDialog by remember { mutableStateOf(false) }
 
@@ -149,7 +169,44 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                if (uiState.appState == AppState.ADMIN) {
+                if (uiState.appState == AppState.SETUP_SERVER) {
+                    SetupServerScreen(
+                        currentUrl = serverUrl,
+                        onSaveUrl = { newUrl ->
+                            serverUrl = newUrl
+                            networkRepository.updateServerUrl(newUrl)
+                            // 重新开始初始化
+                            viewModel.setInitializingState()
+                            performInitialization()
+                        }
+                    )
+                } else if (uiState.appState == AppState.SETUP_ADMIN) {
+                    var isSettingAdmin by remember { mutableStateOf(false) }
+                    SetupAdminScreen(
+                        isLoading = isSettingAdmin,
+                        onSetupAdmin = { name, password ->
+                            isSettingAdmin = true
+                            lifecycleScope.launch {
+                                val deviceId = android.provider.Settings.Secure.getString(
+                                    contentResolver,
+                                    android.provider.Settings.Secure.ANDROID_ID
+                                ) ?: "default_user"
+                                val success = networkRepository.initAdmin(deviceId, password, name)
+                                withContext(Dispatchers.Main) {
+                                    isSettingAdmin = false
+                                    if (success) {
+                                        Toast.makeText(this@MainActivity, "初始化成功！", Toast.LENGTH_SHORT).show()
+                                        // 重新开始初始化以便登录流程
+                                        viewModel.setInitializingState()
+                                        performInitialization()
+                                    } else {
+                                        Toast.makeText(this@MainActivity, "初始化失败，请重试", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
+                    )
+                } else if (uiState.appState == AppState.ADMIN) {
                     // 管理员模式界面
                     AdminModeScreen(
                         audioRecords = audioRecords,
@@ -170,7 +227,12 @@ class MainActivity : ComponentActivity() {
                             viewModel.enterUserConversation()
                         },
                         currentUserId = currentUser?.userId,
-                        initialTab = uiState.adminInitialTab
+                        initialTab = uiState.adminInitialTab,
+                        serverUrl = serverUrl,
+                        onUpdateServerUrl = { newUrl ->
+                            serverUrl = newUrl
+                            networkRepository.updateServerUrl(newUrl)
+                        }
                     )
                 } else if (uiState.appState == AppState.USER_CONVERSATION) {
                     // 用户对话详情界面
@@ -202,13 +264,16 @@ class MainActivity : ComponentActivity() {
                 } else if (uiState.appState == AppState.SELECTING_RECEIVER) {
                     // 接收者选择界面
                     ReceiverSelectionScreen(
-                        users = users,
+                        users = users.filter { it.userId != currentUser?.userId },
                         currentUserId = currentUser?.userId,
                         onReceiverSelected = { receiver ->
-                            confirmSendToReceiver(receiver.userId)
+                            // 不直接发送，而是更新当前接收者并回到确认发送界面
+                            localLastRecipientId = receiver.userId
+                            appPreferences.lastRecipientId = receiver.userId
+                            viewModel.setConfirmingState(uiState.currentAudioPath ?: "")
                         },
                         onCancel = {
-                            viewModel.setIdleState()
+                            viewModel.setConfirmingState(uiState.currentAudioPath ?: "")
                         }
                     )
                 } else if (uiState.appState == AppState.USER_HISTORY) {
@@ -250,7 +315,17 @@ class MainActivity : ComponentActivity() {
                         onStartRecording = { requestRecordingPermission() },
                         onStopRecording = { stopRecording() },
                         onCancelRecording = { cancelRecording() },
-                        onConfirmSend = { confirmSend() },
+                        onConfirmSend = { 
+                            if (currentRecipientId != null) {
+                                confirmSendToReceiver(currentRecipientId) 
+                            } else {
+                                Toast.makeText(this@MainActivity, "没有可用的接收者", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        currentRecipientName = currentRecipientName,
+                        onChangeRecipient = {
+                            viewModel.showReceiverSelection(uiState.currentAudioPath ?: "")
+                        },
                         onPlayAudio = { lifecycleScope.launch { playLatestAudio() } },
                         onStopPlayback = { stopPlayback() },
                         onPausePlayback = { pausePlayback() },
@@ -464,6 +539,21 @@ class MainActivity : ComponentActivity() {
     private fun performInitialization() {
         lifecycleScope.launch {
             try {
+                val appPreferences = AppPreferences(this@MainActivity)
+                val currentUrl = appPreferences.serverUrl
+
+                if (currentUrl.isBlank()) {
+                    viewModel.setSetupServerState()
+                    return@launch
+                }
+
+                viewModel.updateInitMessage("检查系统状态...")
+                val status = networkRepository.getSystemStatus()
+                if (status != null && !status.isInitialized) {
+                    viewModel.setSetupAdminState()
+                    return@launch
+                }
+
                 // 1. 用户识别
                 viewModel.updateInitMessage("正在识别用户...")
                 android.util.Log.d("Init", "开始用户识别: ${System.currentTimeMillis()}")
@@ -828,7 +918,9 @@ class MainActivity : ComponentActivity() {
                             playAudio(savedRecord)
 
                             // 标记云端消息为已播放
-                            networkRepository.markAsPlayed(latestMessage.id)
+                            if (currentUserId == latestMessage.receiverId) {
+                                networkRepository.markAsPlayed(latestMessage.id)
+                            }
                         } else {
                             throw Exception("保存记录失败")                }
                     } else {
@@ -918,7 +1010,10 @@ class MainActivity : ComponentActivity() {
 
                 // 标记为已播放
                 lifecycleScope.launch {
-                    database.audioRecordDao().markAsPlayed(record.id)
+                    val currentUserId = userViewModel.currentUser.value?.userId
+                    if (record.receiverId == null || currentUserId == record.receiverId) {
+                        database.audioRecordDao().markAsPlayed(record.id)
+                    }
                 }
             }
         } else {
@@ -927,7 +1022,10 @@ class MainActivity : ComponentActivity() {
             audioPlayerService.playAudio(record.filePath, record.id)
 
             lifecycleScope.launch {
-                database.audioRecordDao().markAsPlayed(record.id)
+                val currentUserId = userViewModel.currentUser.value?.userId
+                if (record.receiverId == null || currentUserId == record.receiverId) {
+                    database.audioRecordDao().markAsPlayed(record.id)
+                }
             }
         }
     }
@@ -1238,22 +1336,9 @@ class MainActivity : ComponentActivity() {
     private fun stopRecording() {
         val filePath = audioService.stopRecording()
         if (filePath != null) {
-            val currentUser = userViewModel.currentUser.value
-
-            // 只有管理员才显示接收者选择界面
-            if (currentUser?.role == "admin") {
-                // 管理员：显示接收者选择界面
-                lifecycleScope.launch {
-                    android.util.Log.d("MainActivity", "管理员模式：显示接收者选择")
-                    userViewModel.syncAllUsers()
-                    delay(500)
-                    viewModel.showReceiverSelection(filePath)
-                }
-            } else {
-                // 普通用户：显示原来的确认界面（取消/发送）
-                android.util.Log.d("MainActivity", "普通用户模式：显示确认界面")
-                triggerConfirmation(filePath)
-            }
+            // 所有设备统一显示下方的确认界面（上半部取消下半部发送）
+            android.util.Log.d("MainActivity", "录音结束：显示确认界面")
+            triggerConfirmation(filePath)
         }
     }
 
@@ -1266,85 +1351,7 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this, "已取消录音", Toast.LENGTH_SHORT).show()
     }
 
-    /**
-     * 确认发送（带云端上传）
-     */
-    private fun confirmSend() {
-        val audioPath = viewModel.uiState.value.currentAudioPath
-        if (audioPath != null) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                // 保存到数据库
-                val file = File(audioPath)
 
-                // 获取音频文件的实际时长
-                val duration = getAudioDuration(audioPath)
-
-                // 获取当前用户和接收者
-                val currentUserId = userViewModel.currentUser.value?.userId ?: "unknown"
-
-                // 普通用户默认发送给管理员
-                val adminUser = userViewModel.users.value.firstOrNull { it.role == "admin" }
-                val receiverId = adminUser?.userId ?: "admin_user"
-
-                val record = AudioRecord(
-                    filePath = audioPath,
-                    duration = duration,
-                    createdAt = System.currentTimeMillis(),
-                    nfcTagId = "default",
-                    senderId = currentUserId,
-                    receiverId = receiverId
-                )
-
-                val recordId = database.audioRecordDao().insertRecord(record)
-                val savedRecord = database.audioRecordDao().getRecordById(recordId)
-
-                if (savedRecord != null) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "录音已保存", Toast.LENGTH_SHORT).show()
-                    }
-
-                    // 异步上传到云端
-                    launch(Dispatchers.IO) {
-                        try {
-                            val result = networkRepository.uploadAudio(
-                                savedRecord,
-                                senderId = currentUserId,
-                                receiverId = receiverId
-                            )
-                            if (result != null) {
-                                // 更新数据库中的云端信息
-                                database.audioRecordDao().updateCloudInfo(
-                                    savedRecord.id,
-                                    result.first,
-                                    result.second
-                                )
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "已发送",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // 上传失败不影响本地使用
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "发送失败",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    viewModel.setIdleState()
-                }
-            }
-        }
-    }
 
     /**
      * 获取音频文件时长（秒）
@@ -1390,7 +1397,10 @@ class MainActivity : ComponentActivity() {
                 playAudio(localRecord)
 
                 // 标记云端消息为已播放
-                networkRepository.markAsPlayed(message.id)
+                val currentUserId = userViewModel.currentUser.value?.userId
+                if (currentUserId == message.receiverId) {
+                    networkRepository.markAsPlayed(message.id)
+                }
             } else {
                 // 本地没有，需要下载
                 viewModel.updateSyncMessage("下载中...")
@@ -1429,7 +1439,10 @@ class MainActivity : ComponentActivity() {
                         playAudio(savedRecord)
 
                         // 标记云端消息为已播放
-                        networkRepository.markAsPlayed(message.id)
+                        val currentUserId = userViewModel.currentUser.value?.userId
+                        if (currentUserId == message.receiverId) {
+                            networkRepository.markAsPlayed(message.id)
+                        }
                     } else {
                         throw Exception("保存记录失败")
                     }

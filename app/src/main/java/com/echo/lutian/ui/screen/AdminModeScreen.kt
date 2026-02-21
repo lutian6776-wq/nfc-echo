@@ -124,7 +124,9 @@ fun AdminModeScreen(
     onUpdateUserName: (String, String) -> Unit = { _, _ -> },
     onUserSelected: (com.echo.lutian.data.entity.User) -> Unit = {},
     currentUserId: String? = null,
-    initialTab: Int = 0
+    initialTab: Int = 0,
+    serverUrl: String = "",
+    onUpdateServerUrl: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
@@ -177,7 +179,9 @@ fun AdminModeScreen(
                 onPlayAudio = onPlayAudio,
                 onDeleteAudio = onDeleteAudio,
                 onTestRecord = onTestRecord,
-                users = users
+                users = users,
+                serverUrl = serverUrl,
+                onUpdateServerUrl = onUpdateServerUrl
             )
             2 -> UserManagementPanel(
                 users = users,
@@ -540,13 +544,52 @@ fun DebugPanel(
     onPlayAudio: (AudioRecord) -> Unit,
     onDeleteAudio: (AudioRecord) -> Unit,
     onTestRecord: () -> Unit,
-    users: List<com.echo.lutian.data.entity.User> = emptyList()
+    users: List<com.echo.lutian.data.entity.User> = emptyList(),
+    serverUrl: String = "",
+    onUpdateServerUrl: (String) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // 服务器地址配置
+        Text(
+            text = "系统配置",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var inputUrl by remember(serverUrl) { mutableStateOf(serverUrl) }
+        OutlinedTextField(
+            value = inputUrl,
+            onValueChange = { inputUrl = it },
+            label = { Text("后端服务器地址 (以 / 结尾)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF2196F3),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF2196F3),
+                unfocusedLabelColor = Color.Gray,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            ),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = { onUpdateServerUrl(inputUrl) },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("保存配置并重启网络连接", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         // 测试录音按钮
         Button(
             onClick = onTestRecord,
