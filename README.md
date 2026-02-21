@@ -1,8 +1,11 @@
 # HeartEcho 完整功能实现总结
+截图1  <img width="864" height="1600" alt="Screenshot_20260221-204631_crDroid Home" src="https://github.com/user-attachments/assets/25761477-ea6b-40cf-a096-a278c646ff71" />
+
+截图2 <img width="864" height="1600" alt="Screenshot_20260221-204908_crDroid Home" src="https://github.com/user-attachments/assets/49f0b944-6c61-4273-82e4-d9c0ce8dc69f" />
 
 ## 项目概述
 
-HeartEcho 是一个基于 NFC 的语音留言应用，专为老年人设计，通过简单的 NFC 标签触碰实现录音和播放功能。
+HeartEcho 是一个基于 NFC 的语音留言应用，专为老年人和残疾人群设计，通过简单的 NFC 标签触碰实现录音和播放功能。
 
 ## 核心功能
 
